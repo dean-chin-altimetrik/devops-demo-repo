@@ -46,9 +46,17 @@ jobs:
           if [ -z "$all_tags" ]; then
             echo "No version tags found, will start with release/1.0.x"
             echo "has_tags=false" >> $GITHUB_OUTPUT
+            echo "latest_tag=" >> $GITHUB_OUTPUT
             echo "latest_major=0" >> $GITHUB_OUTPUT
             echo "latest_minor=0" >> $GITHUB_OUTPUT
             echo "latest_patch=0" >> $GITHUB_OUTPUT
+            
+            # Output tag summary for no tags case
+            echo "## 📋 Git Tag Information" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- **Latest Tag Found:** *No version tags found in repository*" >> $GITHUB_STEP_SUMMARY
+            echo "- **Version Calculation:** Starting with first release version \`1.0\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
           else
             # Get the latest tag
             latest_tag=$(echo "$all_tags" | tail -n1)
@@ -59,9 +67,17 @@ jobs:
             IFS='.' read -r major minor patch <<< "$base_version"
             
             echo "has_tags=true" >> $GITHUB_OUTPUT
+            echo "latest_tag=$latest_tag" >> $GITHUB_OUTPUT
             echo "latest_major=$major" >> $GITHUB_OUTPUT
             echo "latest_minor=$minor" >> $GITHUB_OUTPUT
             echo "latest_patch=$patch" >> $GITHUB_OUTPUT
+            
+            # Output tag summary for existing tags case
+            echo "## 📋 Git Tag Information" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- **Latest Tag Found:** \`$latest_tag\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Version Calculation:** Will increment minor version from \`$major.$minor\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Calculate Branch Version
@@ -120,12 +136,18 @@ jobs:
           if git show-ref --verify --quiet refs/heads/$branch_name || git show-ref --verify --quiet refs/remotes/origin/$branch_name; then
             echo "branch_exists=true" >> $GITHUB_OUTPUT
             echo "Branch $branch_name already exists!"
+            
+            # Output error summary
+            echo "❌ **ERROR: Branch \`$branch_name\` already exists!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Please choose a different version or delete the existing branch first." >> $GITHUB_STEP_SUMMARY
+            exit 1
           else
             echo "branch_exists=false" >> $GITHUB_OUTPUT
             echo "Branch $branch_name does not exist, safe to create"
           fi
 
-      - name: Validate and Show Summary
+      - name: Release Branch Info
         run: |
           branch_name="${{ steps.calc_branch_version.outputs.branch_name }}"
           major="${{ steps.calc_branch_version.outputs.major }}"
@@ -138,7 +160,7 @@ jobs:
           latest_minor="${{ steps.latest_tags.outputs.latest_minor }}"
           latest_patch="${{ steps.latest_tags.outputs.latest_patch }}"
 
-          echo "# Release Branch Creation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "# Release Branch Information" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch Name:** \`$branch_name\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Major Version:** \`$major\`" >> $GITHUB_STEP_SUMMARY
@@ -147,35 +169,21 @@ jobs:
           echo "- **Triggered By:** \`$actor\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Show git tag information
+          # Add final version calculation details
           if [ "$has_tags" = "true" ]; then
-            latest_tag="v$latest_major.$latest_minor.$latest_patch"
-            echo "## 📋 Git Tag Information" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- **Latest Tag Found:** \`$latest_tag\`" >> $GITHUB_STEP_SUMMARY
-            echo "- **Version Calculation:** Incremented minor version from \`$latest_major.$latest_minor\` to \`$major.$minor\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Final Version:** Incremented minor version from \`$latest_major.$latest_minor\` to \`$major.$minor\`" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           else
-            echo "## 📋 Git Tag Information" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- **Latest Tag Found:** *No version tags found in repository*" >> $GITHUB_STEP_SUMMARY
-            echo "- **Version Calculation:** Starting with first release version \`$major.$minor\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Final Version:** Starting with first release version \`$major.$minor\`" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
 
-          if [ "$branch_exists" = "true" ]; then
-            echo "❌ **ERROR: Branch \`$branch_name\` already exists!**" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Please choose a different version or delete the existing branch first." >> $GITHUB_STEP_SUMMARY
-            exit 1
-          else
-            echo "✅ **Branch \`$branch_name\` is available for creation**" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "⚠️ **APPROVAL REQUIRED**" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "The next job will require approval from the \`branch-creation-approval\` environment." >> $GITHUB_STEP_SUMMARY
-            echo "Please review the details above and approve when prompted." >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "✅ **Branch \`$branch_name\` is available for creation**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **APPROVAL REQUIRED**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The next job will require approval from the \`branch-creation-approval\` environment." >> $GITHUB_STEP_SUMMARY
+          echo "Please review the details above and approve when prompted." >> $GITHUB_STEP_SUMMARY
 
   create_release_branch:
     runs-on: ubuntu-latest
