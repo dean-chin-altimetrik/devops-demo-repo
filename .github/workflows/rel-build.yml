@@ -9,9 +9,6 @@ on:
         tags-ignore:
             - "**"
     create:
-    workflow_run:
-        workflows: ["Create Release Branch"]
-        types: [completed]
     workflow_dispatch:
         inputs:
             release_branch:
@@ -28,6 +25,9 @@ on:
 jobs:
     build:
         runs-on: ubuntu-latest
+        if: |
+            github.event_name == 'workflow_dispatch' ||
+            (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/'))
         outputs:
             version: ${{ steps.vars.outputs.version }}
             tag_version: ${{ steps.vars.outputs.tag_version }}
@@ -36,88 +36,54 @@ jobs:
             branch: ${{ steps.vars.outputs.branch }}
 
         steps:
-            - name: Check if Release Branch
-              if: github.event_name == 'create' && github.event.ref_type == 'branch'
-              run: |
-                  branch_name="${{ github.event.ref }}"
-                  if [[ ! $branch_name =~ ^release/[0-9]+\.[0-9]+\.x$ ]]; then
-                      echo "Not a release branch: $branch_name"
-                      echo "Skipping build for non-release branch"
-                      exit 0
-                  else
-                      echo "Release branch detected: $branch_name"
-                  fi
-
             - name: Checkout Code
               uses: actions/checkout@v4
               with:
                   fetch-depth: 0
-                  ref: ${{ github.event.inputs.release_branch || github.event.workflow_run.head_branch || github.event.ref || github.ref }}
-
+                  ref: ${{ github.event.inputs.release_branch || github.ref }}
             - name: Calculate Next Tag Version
               id: calc_tag
               run: |
-                  # Get branch name based on trigger type
-                  if [ -n "${{ github.event.inputs.release_branch }}" ]; then
-                      branch_name="${{ github.event.inputs.release_branch }}"
-                      echo "Manual trigger: Building branch $branch_name"
-                  elif [ "${{ github.event_name }}" = "workflow_run" ]; then
-                      # Extract branch name from the workflow run
-                      branch_name="${{ github.event.workflow_run.head_branch }}"
-                      workflow_name="${{ github.event.workflow_run.name }}"
-                      triggered_by_actor="${{ github.event.workflow_run.actor }}"
-                      echo "Workflow run trigger: Building branch $branch_name"
-                      echo "Triggered by: $workflow_name (actor: $triggered_by_actor)"
-                  elif [ "${{ github.event_name }}" = "create" ]; then
-                      branch_name="${{ github.event.ref }}"
-                      echo "Branch creation trigger: Building new branch $branch_name"
-                  else
-                      branch_name=${GITHUB_REF#refs/heads/}
-                      echo "Push trigger: Building branch $branch_name"
-                  fi
+                branch_name="${{ github.event.ref }}"
+                echo "Building branch $branch_name"
+            
 
-                  # Extract major.minor from branch name (release/1.2.x -> 1.2)
-                  major_minor=$(echo $branch_name | sed 's/release\/\([0-9]*\.[0-9]*\)\.x/\1/')
+                # Extract major.minor from branch name (release/1.2.x -> 1.2)
+                major_minor=$(echo $branch_name | sed 's/release\/\([0-9]*\.[0-9]*\)\.x/\1/')
 
-                  # Validate branch name format
-                  if [[ ! $branch_name =~ ^release/[0-9]+\.[0-9]+\.x$ ]]; then
-                      echo "Error: Invalid release branch format. Expected: release/X.Y.x (e.g., release/1.2.x)"
-                      echo "Provided: $branch_name"
-                      exit 1
-                  fi
+                # Validate branch name format
+                if [[ ! $branch_name =~ ^release/[0-9]+\.[0-9]+\.x$ ]]; then
+                    echo "Error: Invalid release branch format. Expected: release/X.Y.x (e.g., release/1.2.x)"
+                    echo "Provided: $branch_name"
+                    exit 1
+                fi
 
-                  # Find latest patch version for this major.minor
-                  latest_patch_tag=$(git tag --list "v${major_minor}.*" | sort -V | tail -n1)
+                # Find latest patch version for this major.minor
+                latest_patch_tag=$(git tag --list "v${major_minor}.*" | sort -V | tail -n1)
 
-                  if [ -z "$latest_patch_tag" ]; then
-                      # No existing tags for this major.minor, start with .0
-                      patch=0
-                  else
-                      # Extract patch number from latest tag (v1.2.5 -> 5)
-                      patch=$(echo $latest_patch_tag | sed 's/v[0-9]*\.[0-9]*\.\([0-9]*\)/\1/')
-                      patch=$((patch + 1))
-                  fi
+                if [ -z "$latest_patch_tag" ]; then
+                    # No existing tags for this major.minor, start with .0
+                    patch=0
+                else
+                    # Extract patch number from latest tag (v1.2.5 -> 5)
+                    patch=$(echo $latest_patch_tag | sed 's/v[0-9]*\.[0-9]*\.\([0-9]*\)/\1/')
+                    patch=$((patch + 1))
+                fi
 
-                  # Handle force rebuild - always increment patch number
-                  if [ "${{ github.event.inputs.force_rebuild }}" = "true" ]; then
-                      echo "Force rebuild enabled - incrementing patch number"
-                      patch=$((patch + 1))
-                  fi
+                # Create full version tag
+                new_tag="v${major_minor}.${patch}"
 
-                  # Create full version tag
-                  new_tag="v${major_minor}.${patch}"
+                echo "major_minor=$major_minor" >> $GITHUB_OUTPUT
+                echo "patch=$patch" >> $GITHUB_OUTPUT
+                echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
+                echo "latest_patch_tag=$latest_patch_tag" >> $GITHUB_OUTPUT
+                echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
 
-                  echo "major_minor=$major_minor" >> $GITHUB_OUTPUT
-                  echo "patch=$patch" >> $GITHUB_OUTPUT
-                  echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
-                  echo "latest_patch_tag=$latest_patch_tag" >> $GITHUB_OUTPUT
-                  echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
-
-                  echo "Latest patch tag for $major_minor: $latest_patch_tag"
-                  if [ "${{ github.event.inputs.force_rebuild }}" = "true" ]; then
-                      echo "Force rebuild: Incrementing patch number by 1"
-                  fi
-                  echo "Next tag will be: $new_tag"
+                echo "Latest patch tag for $major_minor: $latest_patch_tag"
+                if [ "${{ github.event.inputs.force_rebuild }}" = "true" ]; then
+                    echo "Force rebuild: Incrementing patch number by 1"
+                fi
+                echo "Next tag will be: $new_tag"
 
             - name: Set Version Info
               id: vars
@@ -127,7 +93,7 @@ jobs:
                   major_minor="${{ steps.calc_tag.outputs.major_minor }}"
                   patch="${{ steps.calc_tag.outputs.patch }}"
 
-                   echo "version=${major_minor}.${patch}" >> $GITHUB_OUTPUT
+                  echo "version=${major_minor}.${patch}" >> $GITHUB_OUTPUT
                   echo "tag_version=$new_tag" >> $GITHUB_OUTPUT
                   echo "commit=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
                   echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
