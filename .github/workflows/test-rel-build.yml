@@ -1,4 +1,4 @@
-name: rel-build
+name: test-rel-build
 
 on:
     push:
