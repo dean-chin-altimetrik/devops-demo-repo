@@ -1,0 +1,173 @@
+name: create-rel-branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_mode:
+        description: "How to create the release branch"
+        required: true
+        type: choice
+        options:
+          - "Create next release branch automatically"
+          - "Specify Major.Minor version manually"
+        default: "Create next release branch automatically"
+      major_version:
+        description: "Major version number (required if specifying manually)"
+        required: false
+        type: string
+        default: ""
+      minor_version:
+        description: "Minor version number (required if specifying manually)"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  create_release_branch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch Latest Git Tags (SemVer aware)
+        id: latest_tags
+        run: |
+          # Get all version tags and sort them (format: v<MAJOR>.<MINOR>.<PATCH>)
+          all_tags=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' | sort -V)
+          if [ -z "$all_tags" ]; then
+            echo "No version tags found, starting from v1.0.0"
+            echo "latest_major=1" >> $GITHUB_OUTPUT
+            echo "latest_minor=0" >> $GITHUB_OUTPUT
+            echo "latest_patch=0" >> $GITHUB_OUTPUT
+          else
+            # Get the latest tag
+            latest_tag=$(echo "$all_tags" | tail -n1)
+            echo "Latest tag found: $latest_tag"
+            
+            # Extract major.minor.patch from latest tag (remove 'v' prefix)
+            base_version=${latest_tag#v}
+            IFS='.' read -r major minor patch <<< "$base_version"
+            
+            echo "latest_major=$major" >> $GITHUB_OUTPUT
+            echo "latest_minor=$minor" >> $GITHUB_OUTPUT
+            echo "latest_patch=$patch" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Calculate Branch Version
+        id: calc_branch_version
+        run: |
+          create_mode="${{ github.event.inputs.create_mode }}"
+
+          if [ "$create_mode" = "Specify Major.Minor version manually" ]; then
+            major="${{ github.event.inputs.major_version }}"
+            minor="${{ github.event.inputs.minor_version }}"
+            
+            # Validate inputs
+            if [ -z "$major" ] || [ -z "$minor" ]; then
+              echo "Error: Both major and minor version must be provided when specifying manually"
+              exit 1
+            fi
+            
+            # Validate that they are numbers
+            if ! [[ "$major" =~ ^[0-9]+$ ]] || ! [[ "$minor" =~ ^[0-9]+$ ]]; then
+              echo "Error: Major and minor versions must be numeric"
+              exit 1
+            fi
+            
+            echo "Using manually specified version: $major.$minor"
+          else
+            # Auto-calculate next version
+            latest_major="${{ steps.latest_tags.outputs.latest_major }}"
+            latest_minor="${{ steps.latest_tags.outputs.latest_minor }}"
+            
+            # For auto mode, increment minor version
+            major=$latest_major
+            minor=$((latest_minor + 1))
+            
+            echo "Auto-calculated next version: $major.$minor"
+          fi
+
+          branch_name="release/$major.$minor.x"
+          echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
+          echo "major=$major" >> $GITHUB_OUTPUT
+          echo "minor=$minor" >> $GITHUB_OUTPUT
+
+      - name: Check if Branch Already Exists
+        id: check_branch
+        run: |
+          branch_name="${{ steps.calc_branch_version.outputs.branch_name }}"
+
+          # Check if branch exists locally or remotely
+          if git show-ref --verify --quiet refs/heads/$branch_name || git show-ref --verify --quiet refs/remotes/origin/$branch_name; then
+            echo "branch_exists=true" >> $GITHUB_OUTPUT
+            echo "Branch $branch_name already exists!"
+          else
+            echo "branch_exists=false" >> $GITHUB_OUTPUT
+            echo "Branch $branch_name does not exist, safe to create"
+          fi
+
+      - name: Validate and Show Summary
+        run: |
+          branch_name="${{ steps.calc_branch_version.outputs.branch_name }}"
+          major="${{ steps.calc_branch_version.outputs.major }}"
+          minor="${{ steps.calc_branch_version.outputs.minor }}"
+          create_mode="${{ github.event.inputs.create_mode }}"
+          branch_exists="${{ steps.check_branch.outputs.branch_exists }}"
+          actor="${{ github.actor }}"
+
+          echo "# Release Branch Creation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch Name:** \`$branch_name\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Major Version:** \`$major\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Minor Version:** \`$minor\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Creation Mode:** \`$create_mode\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered By:** \`$actor\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$branch_exists" = "true" ]; then
+            echo "❌ **ERROR: Branch \`$branch_name\` already exists!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Please choose a different version or delete the existing branch first." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "✅ **Branch \`$branch_name\` is available for creation**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Ready to create the release branch. The workflow will proceed automatically." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Create Release Branch
+        if: steps.check_branch.outputs.branch_exists == 'false'
+        run: |
+          branch_name="${{ steps.calc_branch_version.outputs.branch_name }}"
+
+          # Configure git
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+
+          # Create and switch to the new branch
+          git checkout -b $branch_name
+
+          # Set up remote URL with token
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+
+          # Push the new branch
+          git push -u origin $branch_name
+
+          echo "✅ Successfully created and pushed branch: $branch_name"
+
+      - name: Final Summary
+        if: steps.check_branch.outputs.branch_exists == 'false'
+        run: |
+          branch_name="${{ steps.calc_branch_version.outputs.branch_name }}"
+          branch_url="https://github.com/${{ github.repository }}/tree/$branch_name"
+
+          echo "# ✅ Release Branch Created Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** \`$branch_name\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**[View Branch]($branch_url)**" >> $GITHUB_STEP_SUMMARY
