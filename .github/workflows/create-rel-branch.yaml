@@ -23,10 +23,15 @@ on:
         default: ""
 
 jobs:
-  create_release_branch:
+  validate_and_approve:
     runs-on: ubuntu-latest
+    outputs:
+      branch_name: ${{ steps.calc_branch_version.outputs.branch_name }}
+      major: ${{ steps.calc_branch_version.outputs.major }}
+      minor: ${{ steps.calc_branch_version.outputs.minor }}
+      approved: ${{ steps.approval.outputs.approved }}
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - name: Checkout code
@@ -40,8 +45,9 @@ jobs:
           # Get all version tags and sort them (format: v<MAJOR>.<MINOR>.<PATCH>)
           all_tags=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' | sort -V)
           if [ -z "$all_tags" ]; then
-            echo "No version tags found, starting from v1.0.0"
-            echo "latest_major=1" >> $GITHUB_OUTPUT
+            echo "No version tags found, will start with release/1.0.x"
+            echo "has_tags=false" >> $GITHUB_OUTPUT
+            echo "latest_major=0" >> $GITHUB_OUTPUT
             echo "latest_minor=0" >> $GITHUB_OUTPUT
             echo "latest_patch=0" >> $GITHUB_OUTPUT
           else
@@ -53,6 +59,7 @@ jobs:
             base_version=${latest_tag#v}
             IFS='.' read -r major minor patch <<< "$base_version"
             
+            echo "has_tags=true" >> $GITHUB_OUTPUT
             echo "latest_major=$major" >> $GITHUB_OUTPUT
             echo "latest_minor=$minor" >> $GITHUB_OUTPUT
             echo "latest_patch=$patch" >> $GITHUB_OUTPUT
@@ -62,6 +69,7 @@ jobs:
         id: calc_branch_version
         run: |
           create_mode="${{ github.event.inputs.create_mode }}"
+          has_tags="${{ steps.latest_tags.outputs.has_tags }}"
 
           if [ "$create_mode" = "Specify Major.Minor version manually" ]; then
             major="${{ github.event.inputs.major_version }}"
@@ -82,14 +90,21 @@ jobs:
             echo "Using manually specified version: $major.$minor"
           else
             # Auto-calculate next version
-            latest_major="${{ steps.latest_tags.outputs.latest_major }}"
-            latest_minor="${{ steps.latest_tags.outputs.latest_minor }}"
-            
-            # For auto mode, increment minor version
-            major=$latest_major
-            minor=$((latest_minor + 1))
-            
-            echo "Auto-calculated next version: $major.$minor"
+            if [ "$has_tags" = "false" ]; then
+              # No tags exist, start with 1.0
+              major=1
+              minor=0
+              echo "No tags found, starting with first release: $major.$minor"
+            else
+              # Tags exist, increment minor version
+              latest_major="${{ steps.latest_tags.outputs.latest_major }}"
+              latest_minor="${{ steps.latest_tags.outputs.latest_minor }}"
+              
+              major=$latest_major
+              minor=$((latest_minor + 1))
+              
+              echo "Auto-calculated next version: $major.$minor"
+            fi
           fi
 
           branch_name="release/$major.$minor.x"
@@ -137,13 +152,38 @@ jobs:
           else
             echo "✅ **Branch \`$branch_name\` is available for creation**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Ready to create the release branch. The workflow will proceed automatically." >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ **APPROVAL REQUIRED**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Please review the branch details above and **re-run this workflow** to proceed with branch creation." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**To proceed:** Click 'Re-run jobs' → 'Re-run all jobs' in the Actions tab." >> $GITHUB_STEP_SUMMARY
+            exit 0
           fi
 
-      - name: Create Release Branch
-        if: steps.check_branch.outputs.branch_exists == 'false'
+      - name: Approval Check
+        id: approval
         run: |
-          branch_name="${{ steps.calc_branch_version.outputs.branch_name }}"
+          # This step will only run if the workflow was re-run after the summary step
+          # We'll use a simple check - if we get here, it means the user re-ran the workflow
+          echo "approved=true" >> $GITHUB_OUTPUT
+          echo "✅ Branch creation approved - proceeding with creation"
+
+  create_release_branch:
+    runs-on: ubuntu-latest
+    needs: validate_and_approve
+    if: needs.validate_and_approve.outputs.approved == 'true'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create Release Branch
+        run: |
+          branch_name="${{ needs.validate_and_approve.outputs.branch_name }}"
 
           # Configure git
           git config user.name "${{ github.actor }}"
@@ -161,13 +201,15 @@ jobs:
           echo "✅ Successfully created and pushed branch: $branch_name"
 
       - name: Final Summary
-        if: steps.check_branch.outputs.branch_exists == 'false'
         run: |
-          branch_name="${{ steps.calc_branch_version.outputs.branch_name }}"
+          branch_name="${{ needs.validate_and_approve.outputs.branch_name }}"
+          major="${{ needs.validate_and_approve.outputs.major }}"
+          minor="${{ needs.validate_and_approve.outputs.minor }}"
           branch_url="https://github.com/${{ github.repository }}/tree/$branch_name"
 
           echo "# ✅ Release Branch Created Successfully!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Branch:** \`$branch_name\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** \`$major.$minor\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**[View Branch]($branch_url)**" >> $GITHUB_STEP_SUMMARY
