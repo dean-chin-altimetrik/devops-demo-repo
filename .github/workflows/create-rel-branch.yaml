@@ -133,6 +133,10 @@ jobs:
           create_mode="${{ github.event.inputs.create_mode }}"
           branch_exists="${{ steps.check_branch.outputs.branch_exists }}"
           actor="${{ github.actor }}"
+          has_tags="${{ steps.latest_tags.outputs.has_tags }}"
+          latest_major="${{ steps.latest_tags.outputs.latest_major }}"
+          latest_minor="${{ steps.latest_tags.outputs.latest_minor }}"
+          latest_patch="${{ steps.latest_tags.outputs.latest_patch }}"
 
           echo "# Release Branch Creation Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -142,6 +146,22 @@ jobs:
           echo "- **Creation Mode:** \`$create_mode\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered By:** \`$actor\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Show git tag information
+          if [ "$has_tags" = "true" ]; then
+            latest_tag="v$latest_major.$latest_minor.$latest_patch"
+            echo "## 📋 Git Tag Information" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- **Latest Tag Found:** \`$latest_tag\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Version Calculation:** Incremented minor version from \`$latest_major.$latest_minor\` to \`$major.$minor\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## 📋 Git Tag Information" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- **Latest Tag Found:** *No version tags found in repository*" >> $GITHUB_STEP_SUMMARY
+            echo "- **Version Calculation:** Starting with first release version \`$major.$minor\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
 
           if [ "$branch_exists" = "true" ]; then
             echo "❌ **ERROR: Branch \`$branch_name\` already exists!**" >> $GITHUB_STEP_SUMMARY
