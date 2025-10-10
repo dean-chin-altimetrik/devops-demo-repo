@@ -21,17 +21,20 @@ on:
         required: false
         type: string
         default: ""
+      approve_creation:
+        description: "Approve branch creation (set to 'yes' to proceed)"
+        required: true
+        type: choice
+        options:
+          - "no"
+          - "yes"
+        default: "no"
 
 jobs:
-  validate_and_approve:
+  create_release_branch:
     runs-on: ubuntu-latest
-    outputs:
-      branch_name: ${{ steps.calc_branch_version.outputs.branch_name }}
-      major: ${{ steps.calc_branch_version.outputs.major }}
-      minor: ${{ steps.calc_branch_version.outputs.minor }}
-      approved: ${{ steps.approval.outputs.approved }}
     permissions:
-      contents: read
+      contents: write
 
     steps:
       - name: Checkout code
@@ -126,6 +129,21 @@ jobs:
             echo "Branch $branch_name does not exist, safe to create"
           fi
 
+      - name: Check Approval
+        run: |
+          approval="${{ github.event.inputs.approve_creation }}"
+
+          if [ "$approval" != "yes" ]; then
+            echo "❌ **APPROVAL REQUIRED**"
+            echo ""
+            echo "You must set 'Approve branch creation' to 'yes' to proceed with branch creation."
+            echo ""
+            echo "Please re-run this workflow with the approval set to 'yes'."
+            exit 1
+          fi
+
+          echo "✅ Branch creation approved - proceeding with creation"
+
       - name: Validate and Show Summary
         run: |
           branch_name="${{ steps.calc_branch_version.outputs.branch_name }}"
@@ -152,38 +170,12 @@ jobs:
           else
             echo "✅ **Branch \`$branch_name\` is available for creation**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "⚠️ **APPROVAL REQUIRED**" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Please review the branch details above and **re-run this workflow** to proceed with branch creation." >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**To proceed:** Click 'Re-run jobs' → 'Re-run all jobs' in the Actions tab." >> $GITHUB_STEP_SUMMARY
-            exit 0
+            echo "🚀 **Proceeding with branch creation...**" >> $GITHUB_STEP_SUMMARY
           fi
-
-      - name: Approval Check
-        id: approval
-        run: |
-          # This step will only run if the workflow was re-run after the summary step
-          # We'll use a simple check - if we get here, it means the user re-ran the workflow
-          echo "approved=true" >> $GITHUB_OUTPUT
-          echo "✅ Branch creation approved - proceeding with creation"
-
-  create_release_branch:
-    runs-on: ubuntu-latest
-    needs: validate_and_approve
-    if: needs.validate_and_approve.outputs.approved == 'true'
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Create Release Branch
         run: |
-          branch_name="${{ needs.validate_and_approve.outputs.branch_name }}"
+          branch_name="${{ steps.calc_branch_version.outputs.branch_name }}"
 
           # Configure git
           git config user.name "${{ github.actor }}"
@@ -202,9 +194,9 @@ jobs:
 
       - name: Final Summary
         run: |
-          branch_name="${{ needs.validate_and_approve.outputs.branch_name }}"
-          major="${{ needs.validate_and_approve.outputs.major }}"
-          minor="${{ needs.validate_and_approve.outputs.minor }}"
+          branch_name="${{ steps.calc_branch_version.outputs.branch_name }}"
+          major="${{ steps.calc_branch_version.outputs.major }}"
+          minor="${{ steps.calc_branch_version.outputs.minor }}"
           branch_url="https://github.com/${{ github.repository }}/tree/$branch_name"
 
           echo "# ✅ Release Branch Created Successfully!" >> $GITHUB_STEP_SUMMARY
