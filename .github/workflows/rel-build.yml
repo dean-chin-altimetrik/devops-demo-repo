@@ -8,6 +8,7 @@ on:
             - ".github/**"
         tags-ignore:
             - "**"
+    create:
     workflow_dispatch:
         inputs:
             release_branch:
@@ -32,19 +33,34 @@ jobs:
             branch: ${{ steps.vars.outputs.branch }}
 
         steps:
+            - name: Check if Release Branch
+              if: github.event_name == 'create' && github.event.ref_type == 'branch'
+              run: |
+                  branch_name="${{ github.event.ref }}"
+                  if [[ ! $branch_name =~ ^release/[0-9]+\.[0-9]+\.x$ ]]; then
+                      echo "Not a release branch: $branch_name"
+                      echo "Skipping build for non-release branch"
+                      exit 0
+                  else
+                      echo "Release branch detected: $branch_name"
+                  fi
+
             - name: Checkout Code
               uses: actions/checkout@v4
               with:
                   fetch-depth: 0
-                  ref: ${{ github.event.inputs.release_branch || github.ref }}
+                  ref: ${{ github.event.inputs.release_branch || github.event.ref || github.ref }}
 
             - name: Calculate Next Tag Version
               id: calc_tag
               run: |
-                  # Get branch name (from manual input or current ref)
+                  # Get branch name based on trigger type
                   if [ -n "${{ github.event.inputs.release_branch }}" ]; then
                       branch_name="${{ github.event.inputs.release_branch }}"
                       echo "Manual trigger: Building branch $branch_name"
+                  elif [ "${{ github.event_name }}" = "create" ]; then
+                      branch_name="${{ github.event.ref }}"
+                      echo "Branch creation trigger: Building new branch $branch_name"
                   else
                       branch_name=${GITHUB_REF#refs/heads/}
                       echo "Push trigger: Building branch $branch_name"
@@ -152,6 +168,8 @@ jobs:
                   if [ -n "${{ github.event.inputs.release_branch }}" ]; then
                       echo "- **Trigger:** 🔧 Manual (Branch: \`${{ github.event.inputs.release_branch }}\`)" >> $GITHUB_STEP_SUMMARY
                       echo "- **Force Rebuild:** ${{ github.event.inputs.force_rebuild }}" >> $GITHUB_STEP_SUMMARY
+                  elif [ "${{ github.event_name }}" = "create" ]; then
+                      echo "- **Trigger:** 🌟 Branch Creation (New Branch: \`${{ github.event.ref }}\`)" >> $GITHUB_STEP_SUMMARY
                   else
                       echo "- **Trigger:** 🚀 Automatic Push" >> $GITHUB_STEP_SUMMARY
                   fi
