@@ -44,51 +44,58 @@ jobs:
             - name: Calculate Next Tag Version
               id: calc_tag
               run: |
-                  # Extract branch name from ref (refs/heads/release/1.0.x -> release/1.0.x)
-                  branch_name=${GITHUB_REF#refs/heads/}
-                  echo "Building branch $branch_name"
-
-
-                  # Extract major.minor from branch name (release/1.2.x -> 1.2)
-                  major_minor=$(echo $branch_name | sed 's/release\/\([0-9]*\.[0-9]*\)\.x/\1/')
-
-                  # Validate branch name format
-                  if [[ ! $branch_name =~ ^release/[0-9]+\.[0-9]+\.x$ ]]; then
-                      echo "Error: Invalid release branch format. Expected: release/X.Y.x (e.g., release/1.2.x)"
-                      echo "Provided: $branch_name"
-                      exit 1
-                  fi
-
-                  # Find latest patch version for this major.minor
-                  latest_patch_tag=$(git tag --list "v${major_minor}.*" | sort -V | tail -n1)
-
-                  if [ -z "$latest_patch_tag" ]; then
-                      # No existing tags for this major.minor, start with .0
-                      patch=0
+                  # Get branch name based on trigger type
+                  if [ -n "${{ github.event.inputs.release_branch }}" ]; then
+                      # Manual trigger - use the input branch
+                      branch_name="${{ github.event.inputs.release_branch }}"
+                      echo "Manual trigger: Building branch $branch_name"
                   else
-                      # Extract patch number from latest tag (v1.2.5 -> 5)
-                      patch=$(echo $latest_patch_tag | sed 's/v[0-9]*\.[0-9]*\.\([0-9]*\)/\1/')
-                      patch=$((patch + 1))
+                      # Automatic trigger - extract from GITHUB_REF
+                      branch_name=${GITHUB_REF#refs/heads/}
+                      echo "Automatic trigger: Building branch $branch_name"
                   fi
 
-                  # Create full version tag
-                  new_tag="v${major_minor}.${patch}"
 
-                  echo "major_minor=$major_minor" >> $GITHUB_OUTPUT
-                  echo "patch=$patch" >> $GITHUB_OUTPUT
-                  echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
-                  echo "latest_patch_tag=$latest_patch_tag" >> $GITHUB_OUTPUT
-                  echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
+                    # Extract major.minor from branch name (release/1.2.x -> 1.2)
+                    major_minor=$(echo $branch_name | sed 's/release\/\([0-9]*\.[0-9]*\)\.x/\1/')
 
-                  echo "Latest patch tag for $major_minor: $latest_patch_tag"
+                    # Validate branch name format
+                    if [[ ! $branch_name =~ ^release/[0-9]+\.[0-9]+\.x$ ]]; then
+                        echo "Error: Invalid release branch format. Expected: release/X.Y.x (e.g., release/1.2.x)"
+                        echo "Provided: $branch_name"
+                        exit 1
+                    fi
 
-                  # Handle force rebuild - always increment patch number
-                  if [ "${{ github.event.inputs.force_rebuild }}" = "true" ]; then
-                      echo "Force rebuild enabled - incrementing patch number"
-                      patch=$((patch + 1))
-                  fi
+                    # Find latest patch version for this major.minor
+                    latest_patch_tag=$(git tag --list "v${major_minor}.*" | sort -V | tail -n1)
 
-                  echo "Next tag will be: $new_tag"
+                    if [ -z "$latest_patch_tag" ]; then
+                        # No existing tags for this major.minor, start with .0
+                        patch=0
+                    else
+                        # Extract patch number from latest tag (v1.2.5 -> 5)
+                        patch=$(echo $latest_patch_tag | sed 's/v[0-9]*\.[0-9]*\.\([0-9]*\)/\1/')
+                        patch=$((patch + 1))
+                    fi
+
+                    # Create full version tag
+                    new_tag="v${major_minor}.${patch}"
+
+                    echo "major_minor=$major_minor" >> $GITHUB_OUTPUT
+                    echo "patch=$patch" >> $GITHUB_OUTPUT
+                    echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
+                    echo "latest_patch_tag=$latest_patch_tag" >> $GITHUB_OUTPUT
+                    echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
+
+                    echo "Latest patch tag for $major_minor: $latest_patch_tag"
+
+                    # Handle force rebuild - always increment patch number
+                    if [ "${{ github.event.inputs.force_rebuild }}" = "true" ]; then
+                        echo "Force rebuild enabled - incrementing patch number"
+                        patch=$((patch + 1))
+                    fi
+
+                    echo "Next tag will be: $new_tag"
 
             - name: Set Version Info
               id: vars
