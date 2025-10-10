@@ -4,11 +4,11 @@ on:
     push:
         branches:
             - "release/**"
+            - "origin/release/**"
         paths-ignore:
             - ".github/**"
         tags-ignore:
             - "**"
-    create:
     workflow_dispatch:
         inputs:
             release_branch:
@@ -16,18 +16,10 @@ on:
                 required: true
                 type: string
                 default: ""
-            force_rebuild:
-                description: "Force rebuild even if no changes"
-                required: false
-                type: boolean
-                default: false
 
 jobs:
     build:
         runs-on: ubuntu-latest
-        if: |
-            github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/'))
         outputs:
             version: ${{ steps.vars.outputs.version }}
             tag_version: ${{ steps.vars.outputs.tag_version }}
@@ -88,13 +80,7 @@ jobs:
                     echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
 
                     echo "Latest patch tag for $major_minor: $latest_patch_tag"
-
-                    # Handle force rebuild - always increment patch number
-                    if [ "${{ github.event.inputs.force_rebuild }}" = "true" ]; then
-                        echo "Force rebuild enabled - incrementing patch number"
-                        patch=$((patch + 1))
-                    fi
-
+                    
                     echo "Next tag will be: $new_tag"
 
             - name: Set Version Info
@@ -155,7 +141,6 @@ jobs:
                   echo "" >> $GITHUB_STEP_SUMMARY
                   if [ -n "${{ github.event.inputs.release_branch }}" ]; then
                       echo "- **Trigger:** 🔧 Manual (Branch: \`${{ github.event.inputs.release_branch }}\`)" >> $GITHUB_STEP_SUMMARY
-                      echo "- **Force Rebuild:** ${{ github.event.inputs.force_rebuild }}" >> $GITHUB_STEP_SUMMARY
                   else
                       echo "- **Trigger:** 🚀 Automatic Push" >> $GITHUB_STEP_SUMMARY
                   fi
