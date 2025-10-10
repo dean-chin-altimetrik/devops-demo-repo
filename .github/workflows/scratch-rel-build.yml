@@ -1,0 +1,16 @@
+name: scratch-rel-build
+
+on:
+    push:
+        branches:
+            - "release/**"
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Test
+              run: |
+                  echo "Test"
+            
