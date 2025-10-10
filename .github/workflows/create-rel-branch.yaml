@@ -21,20 +21,16 @@ on:
         required: false
         type: string
         default: ""
-      approve_creation:
-        description: "Approve branch creation (set to 'yes' to proceed)"
-        required: true
-        type: choice
-        options:
-          - "no"
-          - "yes"
-        default: "no"
 
 jobs:
-  create_release_branch:
+  validate_and_show_summary:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      branch_name: ${{ steps.calc_branch_version.outputs.branch_name }}
+      major: ${{ steps.calc_branch_version.outputs.major }}
+      minor: ${{ steps.calc_branch_version.outputs.minor }}
 
     steps:
       - name: Checkout code
@@ -129,21 +125,6 @@ jobs:
             echo "Branch $branch_name does not exist, safe to create"
           fi
 
-      - name: Check Approval
-        run: |
-          approval="${{ github.event.inputs.approve_creation }}"
-
-          if [ "$approval" != "yes" ]; then
-            echo "❌ **APPROVAL REQUIRED**"
-            echo ""
-            echo "You must set 'Approve branch creation' to 'yes' to proceed with branch creation."
-            echo ""
-            echo "Please re-run this workflow with the approval set to 'yes'."
-            exit 1
-          fi
-
-          echo "✅ Branch creation approved - proceeding with creation"
-
       - name: Validate and Show Summary
         run: |
           branch_name="${{ steps.calc_branch_version.outputs.branch_name }}"
@@ -170,12 +151,28 @@ jobs:
           else
             echo "✅ **Branch \`$branch_name\` is available for creation**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "🚀 **Proceeding with branch creation...**" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ **APPROVAL REQUIRED**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "The next job will require approval from the \`branch-creation-approval\` environment." >> $GITHUB_STEP_SUMMARY
+            echo "Please review the details above and approve when prompted." >> $GITHUB_STEP_SUMMARY
           fi
+
+  create_release_branch:
+    runs-on: ubuntu-latest
+    needs: validate_and_show_summary
+    environment: branch-creation-approval
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Create Release Branch
         run: |
-          branch_name="${{ steps.calc_branch_version.outputs.branch_name }}"
+          branch_name="${{ needs.validate_and_show_summary.outputs.branch_name }}"
 
           # Configure git
           git config user.name "${{ github.actor }}"
@@ -194,9 +191,9 @@ jobs:
 
       - name: Final Summary
         run: |
-          branch_name="${{ steps.calc_branch_version.outputs.branch_name }}"
-          major="${{ steps.calc_branch_version.outputs.major }}"
-          minor="${{ steps.calc_branch_version.outputs.minor }}"
+          branch_name="${{ needs.validate_and_show_summary.outputs.branch_name }}"
+          major="${{ needs.validate_and_show_summary.outputs.major }}"
+          minor="${{ needs.validate_and_show_summary.outputs.minor }}"
           branch_url="https://github.com/${{ github.repository }}/tree/$branch_name"
 
           echo "# ✅ Release Branch Created Successfully!" >> $GITHUB_STEP_SUMMARY
