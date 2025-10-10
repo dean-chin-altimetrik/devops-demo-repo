@@ -230,3 +230,36 @@ jobs:
           echo "**Version:** \`$major.$minor\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**[View Branch]($branch_url)**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🚀 **Triggering rel-build workflow for the new branch...**" >> $GITHUB_STEP_SUMMARY
+
+  trigger_rel_build:
+    runs-on: ubuntu-latest
+    needs: create_release_branch
+    permissions:
+      actions: write
+      contents: read
+
+    steps:
+      - name: Trigger rel-build Workflow
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: trigger-rel-build
+          client-payload: |
+            {
+              "branch": "${{ needs.create_release_branch.outputs.branch_name }}",
+              "triggered_by": "create-rel-branch",
+              "triggered_by_actor": "${{ github.actor }}"
+            }
+
+      - name: Show Trigger Summary
+        run: |
+          branch_name="${{ needs.create_release_branch.outputs.branch_name }}"
+          echo "## 🚀 Rel-Build Triggered" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** \`$branch_name\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Workflow:** \`rel-build\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ✅ Triggered Successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The rel-build workflow has been triggered for the new release branch." >> $GITHUB_STEP_SUMMARY
