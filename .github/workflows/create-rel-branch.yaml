@@ -23,7 +23,7 @@ on:
         default: ""
 
 jobs:
-  validate_and_show_summary:
+  prepare_release_branch:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -187,7 +187,7 @@ jobs:
 
   create_release_branch:
     runs-on: ubuntu-latest
-    needs: validate_and_show_summary
+    needs: prepare_release_branch
     environment: branch-creation-approval
     permissions:
       contents: write
@@ -200,7 +200,7 @@ jobs:
 
       - name: Create Release Branch
         run: |
-          branch_name="${{ needs.validate_and_show_summary.outputs.branch_name }}"
+          branch_name="${{ needs.prepare_release_branch.outputs.branch_name }}"
 
           # Configure git
           git config user.name "${{ github.actor }}"
@@ -219,9 +219,9 @@ jobs:
 
       - name: Final Summary
         run: |
-          branch_name="${{ needs.validate_and_show_summary.outputs.branch_name }}"
-          major="${{ needs.validate_and_show_summary.outputs.major }}"
-          minor="${{ needs.validate_and_show_summary.outputs.minor }}"
+          branch_name="${{ needs.prepare_release_branch.outputs.branch_name }}"
+          major="${{ needs.prepare_release_branch.outputs.major }}"
+          minor="${{ needs.prepare_release_branch.outputs.minor }}"
           branch_url="https://github.com/${{ github.repository }}/tree/$branch_name"
 
           echo "# ✅ Release Branch Created Successfully!" >> $GITHUB_STEP_SUMMARY
