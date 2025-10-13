@@ -8,6 +8,9 @@ on:
             - ".github/**"
         tags-ignore:
             - "**"
+    workflow_run:
+        workflows:
+            - create-rel-branch
     workflow_dispatch:
         inputs:
             release_branch:
