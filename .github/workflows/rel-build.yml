@@ -12,7 +12,7 @@ on:
         workflows:
             - create-rel-branch
         types: [completed]
-        branches: ["release/**"]      
+        branches: ["main"]      
       
     workflow_dispatch:
         inputs:
