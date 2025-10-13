@@ -11,6 +11,9 @@ on:
     workflow_run:
         workflows:
             - create-rel-branch
+        types: [completed]
+        branches: ["release/**"]      
+      
     workflow_dispatch:
         inputs:
             release_branch:
@@ -21,6 +24,10 @@ on:
 
 jobs:
     build:
+        if: |
+            github.event_name == 'workflow_dispatch' ||
+            github.event_name == 'push' ||
+            (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
         runs-on: ubuntu-latest
         outputs:
             version: ${{ steps.vars.outputs.version }}
