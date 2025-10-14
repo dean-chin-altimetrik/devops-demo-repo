@@ -40,8 +40,8 @@ jobs:
                   token: ${{ secrets.GITHUB_TOKEN }}
                   # Correctly determine the branch based on the trigger event.
                   ref: >-
-                    ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_branch ||
-                    github.event_name == 'push' && github.ref }}
+                      ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_branch ||
+                      github.event_name == 'push' && github.ref }}
             - name: Calculate Next Tag Version
               id: calc_tag
               run: |
