@@ -22,6 +22,9 @@ jobs:
             github.event_name == 'workflow_dispatch' ||
             github.event_name == 'push'
         runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            actions: read
         outputs:
             version: ${{ steps.vars.outputs.version }}
             tag_version: ${{ steps.vars.outputs.tag_version }}
@@ -34,10 +37,11 @@ jobs:
               uses: actions/checkout@v4
               with:
                   fetch-depth: 0
+                  token: ${{ secrets.GITHUB_TOKEN }}
                   # Correctly determine the branch based on the trigger event.
                   ref: >-
-                      ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_branch ||
-                      github.event_name == 'push' && github.ref }}
+                    ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_branch ||
+                    github.event_name == 'push' && github.ref }}
             - name: Calculate Next Tag Version
               id: calc_tag
               run: |
