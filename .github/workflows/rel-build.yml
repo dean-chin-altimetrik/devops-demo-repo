@@ -8,12 +8,6 @@ on:
             - ".github/**"
         tags-ignore:
             - "**"
-    workflow_run:
-        workflows:
-            - create-rel-branch
-        types: [completed]
-        branches: ["main"]      
-      
     workflow_dispatch:
         inputs:
             release_branch:
@@ -26,8 +20,7 @@ jobs:
     build:
         if: |
             github.event_name == 'workflow_dispatch' ||
-            github.event_name == 'push' ||
-            (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+            github.event_name == 'push'
         runs-on: ubuntu-latest
         outputs:
             version: ${{ steps.vars.outputs.version }}
@@ -43,9 +36,8 @@ jobs:
                   fetch-depth: 0
                   # Correctly determine the branch based on the trigger event.
                   ref: >-
-                    ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_branch ||
-                    github.event_name == 'push' && github.ref ||
-                    github.event.workflow_run.head_branch }}
+                      ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_branch ||
+                      github.event_name == 'push' && github.ref }}
             - name: Calculate Next Tag Version
               id: calc_tag
               run: |
