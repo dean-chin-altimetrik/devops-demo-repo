@@ -317,7 +317,7 @@ jobs:
 
     deploy-prod:
         runs-on: ubuntu-latest
-        needs: [build, deploy-active]
+        needs: [build, deploy-staging]
         environment: prod
         steps:
             - name: Deploy to PROD
