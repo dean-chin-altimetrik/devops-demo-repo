@@ -30,7 +30,7 @@ jobs:
             tag_version: ${{ steps.vars.outputs.tag_version }}
             commit: ${{ steps.vars.outputs.commit }}
             date: ${{ steps.vars.outputs.date }}
-            branch: ${{ steps.vars.outputs.branch }}
+            branch: ${{ steps.calc_tag.outputs.branch_name }}
 
         steps:
             - name: Checkout Code
