@@ -42,6 +42,25 @@ jobs:
                   ref: >-
                       ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_branch ||
                       github.event_name == 'push' && github.ref }}
+
+            - name: Switch to Release Branch Context
+              if: github.event_name == 'workflow_dispatch'
+              run: |
+                  # For workflow_dispatch, we need to ensure we're in the release branch context
+                  # This helps with environment protection rules
+                  release_branch="${{ github.event.inputs.release_branch }}"
+                  echo "Ensuring we're in the context of release branch: $release_branch"
+                  
+                  # Verify we're on the correct branch
+                  current_branch=$(git branch --show-current)
+                  echo "Current branch: $current_branch"
+                  
+                  if [ "$current_branch" != "$release_branch" ]; then
+                      echo "Switching to release branch: $release_branch"
+                      git checkout $release_branch
+                  else
+                      echo "Already on correct release branch: $release_branch"
+                  fi
             - name: Calculate Next Tag Version
               id: calc_tag
               run: |
