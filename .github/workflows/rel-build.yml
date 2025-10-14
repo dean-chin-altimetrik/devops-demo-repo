@@ -45,11 +45,16 @@ jobs:
             - name: Calculate Next Tag Version
               id: calc_tag
               run: |
-                  # Use the correct variable for the branch name
-                  branch_name=$(git branch --show-current)
+                  # Use the branch name from workflow input or fallback to current branch
+                  if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.release_branch }}" ]; then
+                      branch_name="${{ github.event.inputs.release_branch }}"
+                      echo "Using branch from workflow input: $branch_name"
+                  else
+                      branch_name=$(git branch --show-current)
+                      echo "Using current branch: $branch_name"
+                  fi
+                  
                   echo "Building branch $branch_name"
-
-                  echo "Processing branch: $branch_name"
                   echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
 
 
@@ -96,15 +101,15 @@ jobs:
                   major_minor="${{ steps.calc_tag.outputs.major_minor }}"
                   patch="${{ steps.calc_tag.outputs.patch }}"
                   
-                  # Get the actual branch name that was checked out
-                  actual_branch=$(git branch --show-current)
-                  echo "Actual branch: $actual_branch"
+                  # Use the same branch name logic as calc_tag step
+                  branch_name="${{ steps.calc_tag.outputs.branch_name }}"
+                  echo "Using branch from calc_tag: $branch_name"
 
                   echo "version=${major_minor}.${patch}" >> $GITHUB_OUTPUT
                   echo "tag_version=$new_tag" >> $GITHUB_OUTPUT
                   echo "commit=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
                   echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
-                  echo "branch=$actual_branch" >> $GITHUB_OUTPUT
+                  echo "branch=$branch_name" >> $GITHUB_OUTPUT
 
             - name: Compile
               run: |
