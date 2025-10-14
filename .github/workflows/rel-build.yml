@@ -53,7 +53,7 @@ jobs:
                       branch_name=$(git branch --show-current)
                       echo "Using current branch: $branch_name"
                   fi
-                  
+
                   echo "Building branch $branch_name"
                   echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
 
@@ -100,7 +100,7 @@ jobs:
                   new_tag="${{ steps.calc_tag.outputs.new_tag }}"
                   major_minor="${{ steps.calc_tag.outputs.major_minor }}"
                   patch="${{ steps.calc_tag.outputs.patch }}"
-                  
+
                   # Use the same branch name logic as calc_tag step
                   branch_name="${{ steps.calc_tag.outputs.branch_name }}"
                   echo "Using branch from calc_tag: $branch_name"
