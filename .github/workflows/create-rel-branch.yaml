@@ -236,9 +236,9 @@ jobs:
       - name: Trigger Build Workflow
         run: |
           branch_name="${{ needs.prepare_release_branch.outputs.branch_name }}"
-          
+
           echo "Triggering rel-build workflow for branch: $branch_name"
-          
+
           # Trigger the rel-build workflow on the release branch itself
           response=$(curl -s -w "\n%{http_code}" -X POST \
             -H "Accept: application/vnd.github.v3+json" \
@@ -251,14 +251,14 @@ jobs:
                 "release_branch": "'$branch_name'"
               }
             }')
-          
+
           # Extract HTTP status code
           http_code=$(echo "$response" | tail -n1)
           response_body=$(echo "$response" | head -n -1)
-          
+
           echo "HTTP Status Code: $http_code"
           echo "Response: $response_body"
-          
+
           if [ "$http_code" = "204" ]; then
             echo "✅ Successfully triggered rel-build workflow for branch: $branch_name"
           else

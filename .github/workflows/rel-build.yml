@@ -50,11 +50,11 @@ jobs:
                   # This helps with environment protection rules
                   release_branch="${{ github.event.inputs.release_branch }}"
                   echo "Ensuring we're in the context of release branch: $release_branch"
-                  
+
                   # Verify we're on the correct branch
                   current_branch=$(git branch --show-current)
                   echo "Current branch: $current_branch"
-                  
+
                   if [ "$current_branch" != "$release_branch" ]; then
                       echo "Switching to release branch: $release_branch"
                       git checkout $release_branch
