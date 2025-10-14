@@ -45,16 +45,20 @@ jobs:
             - name: Calculate Next Tag Version
               id: calc_tag
               run: |
-                  # Get branch name based on trigger type
-                  if [ -n "${{ github.event.inputs.release_branch }}" ]; then
-                      # Manual trigger - use the input branch
-                      branch_name="${{ github.event.inputs.release_branch }}"
-                      echo "Manual trigger: Building branch $branch_name"
+                  # Determine branch name based on trigger type
+                  if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+                      branch_name="${{ inputs.release_branch }}"
+                  elif [ "${{ github.event_name }}" == "push" ]; then
+                      branch_name="${GITHUB_REF#refs/heads/}"
+                  elif [ "${{ github.event_name }}" == "workflow_run" ]; then
+                      branch_name="${{ github.event.workflow_run.head_branch }}"
                   else
-                      # Automatic trigger - extract from GITHUB_REF
-                      branch_name=${GITHUB_REF#refs/heads/}
-                      echo "Automatic trigger: Building branch $branch_name"
+                      echo "Error: Unknown trigger event type: ${{ github.event_name }}"
+                      exit 1
                   fi
+
+                  echo "Processing branch: $branch_name"
+                  echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
 
 
                     # Extract major.minor from branch name (release/1.2.x -> 1.2)
