@@ -95,12 +95,16 @@ jobs:
                   new_tag="${{ steps.calc_tag.outputs.new_tag }}"
                   major_minor="${{ steps.calc_tag.outputs.major_minor }}"
                   patch="${{ steps.calc_tag.outputs.patch }}"
+                  
+                  # Get the actual branch name that was checked out
+                  actual_branch=$(git branch --show-current)
+                  echo "Actual branch: $actual_branch"
 
                   echo "version=${major_minor}.${patch}" >> $GITHUB_OUTPUT
                   echo "tag_version=$new_tag" >> $GITHUB_OUTPUT
                   echo "commit=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
                   echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
-                  echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+                  echo "branch=$actual_branch" >> $GITHUB_OUTPUT
 
             - name: Compile
               run: |
