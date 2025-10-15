@@ -284,6 +284,68 @@ jobs:
                   echo "- **Status:** ✅ Deployed Successfully" >> $GITHUB_STEP_SUMMARY
                   echo "- **Environment Variables Set:** ✅" >> $GITHUB_STEP_SUMMARY
 
+    deploy-ldqa:
+        runs-on: ubuntu-latest
+        needs: [build, deploy-active]
+        environment: ldqa
+        steps:
+            - name: Deploy to LDQA
+              run: |
+                  tag_version="${{ needs.build.outputs.tag_version }}"
+                  version="${{ needs.build.outputs.version }}"
+                  commit="${{ needs.build.outputs.commit }}"
+                  branch="${{ needs.build.outputs.branch }}"
+
+                  echo "Deploying version $version (tag: $tag_version) to STAGING environment"
+
+                  # Set environment variables for tracking
+                  echo "CURRENT_VERSION=$version" >> $GITHUB_ENV
+                  echo "CURRENT_TAG=$tag_version" >> $GITHUB_ENV
+                  echo "CURRENT_COMMIT=$commit" >> $GITHUB_ENV
+                  echo "CURRENT_BRANCH=$branch" >> $GITHUB_ENV
+                  echo "DEPLOYMENT_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
+
+                  # Add to step summary
+                  echo "## 🧪 LDQA Deployment" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Version:** \`$version\`" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Tag:** \`$tag_version\`" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Branch:** \`$branch\`" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Commit:** \`$commit\`" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Status:** ✅ Deployed Successfully" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Environment Variables Set:** ✅" >> $GITHUB_STEP_SUMMARY
+
+    deploy-qa-perf:
+        runs-on: ubuntu-latest
+        needs: [build, deploy-active]
+        environment: ldqa
+        steps:
+            - name: Deploy to QA-PERF
+              run: |
+                tag_version="${{ needs.build.outputs.tag_version }}"
+                version="${{ needs.build.outputs.version }}"
+                commit="${{ needs.build.outputs.commit }}"
+                branch="${{ needs.build.outputs.branch }}"
+
+                echo "Deploying version $version (tag: $tag_version) to STAGING environment"
+
+                # Set environment variables for tracking
+                echo "CURRENT_VERSION=$version" >> $GITHUB_ENV
+                echo "CURRENT_TAG=$tag_version" >> $GITHUB_ENV
+                echo "CURRENT_COMMIT=$commit" >> $GITHUB_ENV
+                echo "CURRENT_BRANCH=$branch" >> $GITHUB_ENV
+                echo "DEPLOYMENT_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
+
+                # Add to step summary
+                echo "## 🧪 LDQA Deployment" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+                echo "- **Version:** \`$version\`" >> $GITHUB_STEP_SUMMARY
+                echo "- **Tag:** \`$tag_version\`" >> $GITHUB_STEP_SUMMARY
+                echo "- **Branch:** \`$branch\`" >> $GITHUB_STEP_SUMMARY
+                echo "- **Commit:** \`$commit\`" >> $GITHUB_STEP_SUMMARY
+                echo "- **Status:** ✅ Deployed Successfully" >> $GITHUB_STEP_SUMMARY
+                echo "- **Environment Variables Set:** ✅" >> $GITHUB_STEP_SUMMARY
+
     deploy-staging:
         runs-on: ubuntu-latest
         needs: [build, deploy-active]
