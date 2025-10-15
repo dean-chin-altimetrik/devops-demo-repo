@@ -318,7 +318,7 @@ jobs:
     deploy-qa-perf:
         runs-on: ubuntu-latest
         needs: [build, deploy-active]
-        environment: ldqa
+        environment: qa-perf
         steps:
             - name: Deploy to QA-PERF
               run: |
