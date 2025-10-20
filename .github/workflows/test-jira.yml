@@ -155,7 +155,6 @@ out = re.sub(r'(?i)</li>', '\n', out)
 out = re.sub(r'(?s)<[^>]+>', '', out)
 print(out.strip())
 PY
-            )
           fi
 
           IS_REL_SCOPE=false
