@@ -1,0 +1,111 @@
+name: test-jira
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_key:
+        description: "Release Scope Jira issue key"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  check-jira:
+    runs-on: ubuntu-latest
+    env:
+      JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      ISSUE_KEY: ${{ inputs.issue_key }}
+
+    steps:
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Fetch issue (type + description)
+        id: fetch
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${JIRA_BASE_URL}" || -z "${JIRA_EMAIL}" || -z "${JIRA_API_TOKEN}" ]]; then
+            echo "One or more Jira secrets are missing." >&2
+            exit 2
+          fi
+
+          # Ask for the specific fields we need and request rendered HTML for easier text extraction
+          URL="${JIRA_BASE_URL}/rest/api/3/issue/${ISSUE_KEY}?fields=issuetype,description&expand=renderedFields"
+
+          HTTP_STATUS=$(curl -sS -w "%{http_code}" -o /tmp/resp.json \
+            -u "${JIRA_EMAIL}:${JIRA_API_TOKEN}" \
+            -H "Accept: application/json" \
+            "$URL")
+
+          if [[ "$HTTP_STATUS" != "200" ]]; then
+            echo "Failed to fetch issue ${ISSUE_KEY}. HTTP ${HTTP_STATUS}" >&2
+            echo "Response:" >&2
+            cat /tmp/resp.json >&2 || true
+            exit 3
+          fi
+
+          ISSUE_TYPE=$(jq -r '.fields.issuetype.name // empty' /tmp/resp.json)
+          # Prefer rendered HTML (easier to convert to plain text); fall back to raw ADF if needed
+          DESC_HTML=$(jq -r '.renderedFields.description // empty' /tmp/resp.json)
+          DESC_ADF=$(jq -c '.fields.description // empty' /tmp/resp.json)
+
+          # If rendered HTML is empty, produce a rough text fallback from ADF
+          if [[ -z "$DESC_HTML" || "$DESC_HTML" == "null" ]]; then
+            # Very lightweight ADF -> text fallback (best-effort)
+            DESC_TEXT=$(jq -r '
+              def walkblocks($n):
+                if type=="array" then map(walkblocks($n)) | join("\n")
+                elif type=="object" and .type? then
+                  if .type=="text" then .text // ""
+                  elif .type=="paragraph" or .type=="heading" or .type=="bulletList" or .type=="orderedList"
+                    then (.content // []) | map(walkblocks(.)) | join("\n")
+                  elif .type=="listItem"
+                    then (.content // []) | map(walkblocks(.)) | join("")
+                  else (.content // []) | map(walkblocks(.)) | join("")
+                  end
+                else ""
+                end;
+              walkblocks(.)
+            ' <<< "${DESC_ADF:-null}" | sed '/^[[:space:]]*$/d')
+          else
+            # Convert HTML to plain text (strip tags)
+            # Note: This is a simple strip; you can swap in more robust HTML->text if needed.
+            DESC_TEXT=$(printf "%s" "$DESC_HTML" \
+              | sed -E 's/<br[[:space:]]*\/?>/\n/g; s/<\/p>/\n\n/g; s/<\/li>/\n/g; s/<\/h[1-6]>/\n\n/g' \
+              | sed -E 's/<[^>]+>//g' \
+              | sed -E 's/[[:space:]]+$//')
+          fi
+
+          IS_REL_SCOPE=false
+          if [[ "$ISSUE_TYPE" == "REL-SCOPE" ]]; then
+            IS_REL_SCOPE=true
+          fi
+
+          # Expose outputs
+          {
+            echo "issue_type=${ISSUE_TYPE}"
+            echo "is_rel_scope=${IS_REL_SCOPE}"
+            echo "description<<EOF"
+            printf "%s\n" "$DESC_TEXT"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Log results
+        run: |
+          echo "Issue Type: ${{ steps.fetch.outputs.issue_type }}"
+          echo "Is REL-SCOPE: ${{ steps.fetch.outputs.is_rel_scope }}"
+          echo "----- Description -----"
+          printf "%s\n" "${{ steps.fetch.outputs.description }}"
+
+      # (Optional) Fail the job if the type is not REL-SCOPE
+      - name: Enforce REL-SCOPE (optional)
+        if: ${{ steps.fetch.outputs.is_rel_scope != 'true' }}
+        run: |
+          echo "Issue type is not REL-SCOPE; failing as per policy." >&2
+          exit 1
