@@ -74,12 +74,88 @@ jobs:
               walkblocks(.)
             ' <<< "${DESC_ADF:-null}" | sed '/^[[:space:]]*$/d')
           else
-            # Convert HTML to plain text (strip tags)
-            # Note: This is a simple strip; you can swap in more robust HTML->text if needed.
+            # Convert HTML to plain text and convert <table>…</table> into Markdown tables (simple, best-effort)
             DESC_TEXT=$(printf "%s" "$DESC_HTML" \
-              | sed -E 's/<br[[:space:]]*\/?>/\n/g; s/<\/p>/\n\n/g; s/<\/li>/\n/g; s/<\/h[1-6]>/\n\n/g' \
-              | sed -E 's/<[^>]+>//g' \
-              | sed -E 's/[[:space:]]+$//')
+              | python3 - <<'PY'
+import sys, re, html
+from html.parser import HTMLParser
+
+html_in = sys.stdin.read()
+
+class TableParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.tables = []
+        self.in_table = False
+        self.current_rows = []
+        self.current_row = []
+        self.in_cell = False
+        self.cell_text = ''
+        self.last_tag = None
+        self.has_th = False
+
+    def handle_starttag(self, tag, attrs):
+        self.last_tag = tag
+        if tag == 'table':
+            self.in_table = True
+            self.current_rows = []
+            self.has_th = False
+        elif tag == 'tr' and self.in_table:
+            self.current_row = []
+        elif tag in ('td','th') and self.in_table:
+            self.in_cell = True
+            self.cell_text = ''
+            if tag == 'th':
+                self.has_th = True
+
+    def handle_endtag(self, tag):
+        if tag in ('td','th') and self.in_table:
+            self.in_cell = False
+            self.current_row.append(self.cell_text.strip())
+            self.cell_text = ''
+        elif tag == 'tr' and self.in_table:
+            self.current_rows.append(self.current_row)
+            self.current_row = []
+        elif tag == 'table' and self.in_table:
+            self.tables.append({'rows': self.current_rows, 'has_th': self.has_th})
+            self.in_table = False
+
+    def handle_data(self, data):
+        if self.in_cell:
+            self.cell_text += data
+parser = TableParser()
+parser.feed(html_in)
+
+out = html_in
+# Replace tables from last to first to preserve indices
+for tbl in reversed(parser.tables):
+    rows = tbl['rows']
+    if not rows:
+        md = ''
+    else:
+        col_count = max(len(r) for r in rows)
+        norm = [ [(r[i] if i < len(r) else '') for i in range(col_count)] for r in rows ]
+        # compute widths
+        widths = [max(len(html.unescape(cell)) for cell in col) for col in zip(*norm)]
+        def mkrow(r):
+            return '| ' + ' | '.join(html.unescape(cell).strip().ljust(widths[i]) for i,cell in enumerate(r)) + ' |'
+        md_lines = []
+        md_lines.append(mkrow(norm[0]))
+        sep = '| ' + ' | '.join('-' * widths[i] for i in range(col_count)) + ' |'
+        md_lines.append(sep)
+        for r in norm[1:]:
+            md_lines.append(mkrow(r))
+        md = '\n'.join(md_lines)
+    # replace first <table ...>...</table> occurrence
+    out = re.sub(r'(?is)<table.*?</table>', lambda m: md, out, count=1)
+# Basic tag to text conversion for remaining HTML
+out = re.sub(r'(?i)<br\s*/?>', '\n', out)
+out = re.sub(r'(?i)</p>', '\n\n', out)
+out = re.sub(r'(?i)</li>', '\n', out)
+out = re.sub(r'(?s)<[^>]+>', '', out)
+print(out.strip())
+PY
+            )
           fi
 
           IS_REL_SCOPE=false
