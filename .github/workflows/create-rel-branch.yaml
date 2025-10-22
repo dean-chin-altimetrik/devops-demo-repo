@@ -4,6 +4,11 @@ name: create-rel-branch
 on:
   workflow_dispatch:
     inputs:
+      jira_scope_id:
+        description: "Jira Scope ID (required)"
+        required: true
+        type: string
+        default: ""
       create_mode:
         description: "How to create the release branch"
         required: true
@@ -33,6 +38,7 @@ jobs:
       branch_name: ${{ steps.calc_branch_version.outputs.branch_name }}
       major: ${{ steps.calc_branch_version.outputs.major }}
       minor: ${{ steps.calc_branch_version.outputs.minor }}
+      jira_scope_id: ${{ steps.calc_branch_version.outputs.jira_scope_id }}
 
     steps:
       - name: Checkout code
@@ -86,6 +92,7 @@ jobs:
         run: |
           create_mode="${{ github.event.inputs.create_mode }}"
           has_tags="${{ steps.latest_tags.outputs.has_tags }}"
+          jira_scope_id="${{ github.event.inputs.jira_scope_id }}"
 
           if [ "$create_mode" = "Specify Major.Minor version manually" ]; then
             major="${{ github.event.inputs.major_version }}"
@@ -142,6 +149,8 @@ jobs:
           echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
           echo "major=$major" >> $GITHUB_OUTPUT
           echo "minor=$minor" >> $GITHUB_OUTPUT
+          # Pass Jira Scope ID through as an output so downstream steps can use it
+          echo "jira_scope_id=$jira_scope_id" >> $GITHUB_OUTPUT
 
       - name: Check if Branch Already Exists
         id: check_branch
@@ -171,6 +180,7 @@ jobs:
           create_mode="${{ github.event.inputs.create_mode }}"
           branch_exists="${{ steps.check_branch.outputs.branch_exists }}"
           actor="${{ github.actor }}"
+          jira_scope_id="${{ steps.calc_branch_version.outputs.jira_scope_id }}"
           has_tags="${{ steps.latest_tags.outputs.has_tags }}"
           latest_major="${{ steps.latest_tags.outputs.latest_major }}"
           latest_minor="${{ steps.latest_tags.outputs.latest_minor }}"
@@ -183,6 +193,7 @@ jobs:
           echo "- **Minor Version:** \`$minor\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Creation Mode:** \`$create_mode\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered By:** \`$actor\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Jira Scope ID:** \`$jira_scope_id\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Add final version calculation details using creation mode
