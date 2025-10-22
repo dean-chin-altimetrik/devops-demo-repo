@@ -270,6 +270,7 @@ jobs:
       - name: Upsert component info to Jira Release Scope
         uses: dean-chin-altimetrik/platform-github-actions/.github/actions/jira-rel-scope@main
         with:
+          command: "upsert"
           jira_key: ${{ needs.prepare_release_branch.outputs.jira_scope_id }}
           component: ${{ github.event.repository.name }}
           branch_name: ${{ needs.prepare_release_branch.outputs.branch_name }}

@@ -225,6 +225,19 @@ jobs:
         needs: [build, deploy-future]
         environment: active
         steps:
+            - name: Lookup component in REL-SCOPE tickets
+              uses: dean-chin-altimetrik/platform-github-actions/.github/actions/jira-rel-scope
+              with:
+                command: lookup
+                project: "LPL"
+                state: "Active Env"
+                component: ${{ github.event.repository.name }}
+                release_branch: ${{ github.ref_name }}
+              env:
+                JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+                JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+                JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+            
             - name: Deploy to ACTIVE
               run: |
                   tag_version="${{ needs.build.outputs.tag_version }}"
