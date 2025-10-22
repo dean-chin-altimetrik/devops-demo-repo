@@ -146,7 +146,7 @@ jobs:
                   with:
                     fetch-depth: 0
 
-                - name: Fetch Latest Git Tags (SemVer aware)
+                - name: Fetch Latest Git Tags - SemVer aware
                   id: latest_tags
                   run: |
                     # Get all version tags and sort them (format: v<MAJOR>.<MINOR>.<PATCH>)
