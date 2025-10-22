@@ -51,7 +51,7 @@ jobs:
           # Get all version tags and sort them (format: v<MAJOR>.<MINOR>.<PATCH>)
           all_tags=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' | sort -V)
           if [ -z "$all_tags" ]; then
-            echo "No version tags found, will start with release/1.0.x"
+            echo "No version tags found, will start with release/1.0"
             echo "has_tags=false" >> $GITHUB_OUTPUT
             echo "latest_tag=" >> $GITHUB_OUTPUT
             echo "latest_major=0" >> $GITHUB_OUTPUT
@@ -144,7 +144,7 @@ jobs:
             fi
           fi
 
-          branch_name="release/$major.$minor.x"
+          branch_name="release/$major.$minor"
           echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
           echo "major=$major" >> $GITHUB_OUTPUT
           echo "minor=$minor" >> $GITHUB_OUTPUT
