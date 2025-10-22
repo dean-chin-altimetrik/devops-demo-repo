@@ -223,7 +223,7 @@ jobs:
 
     deploy-active:
         runs-on: ubuntu-latest
-        needs: build
+        needs: [build, deploy-future]
         environment: active
         steps:
             - name: Deploy to ACTIVE
