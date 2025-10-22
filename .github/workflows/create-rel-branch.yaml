@@ -268,6 +268,13 @@ jobs:
           echo "✅ Successfully created and pushed branch: $branch_name"
           echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
 
+      - name: Upsert component info to Jira Release Scope
+        uses: dean-chin-altimetrik/platform-github-actions/.github/actions/jira-rel-scope@main
+        with:
+          jira-key: ${{ needs.prepare_release_branch.outputs.jira_scope_id }}
+          component: ${{ github.repository }}
+          branch-name: ${{ needs.prepare_release_branch.outputs.branch_name }}
+
       - name: Trigger Build Workflow
         run: |
           branch_name="${{ needs.prepare_release_branch.outputs.branch_name }}"
