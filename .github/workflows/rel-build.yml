@@ -192,7 +192,6 @@ jobs:
     deploy-future:
         runs-on: ubuntu-latest
         needs: build
-        if: false # Optional deployment - set to true to enable
         environment: future
         steps:
             - name: Deploy to FUTURE
