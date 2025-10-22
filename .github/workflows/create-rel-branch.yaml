@@ -22,30 +22,6 @@ on:
         required: false
         type: string
         default: ""
-name: create-rel-branch
-
-on:
-  workflow_dispatch:
-    inputs:
-      create_mode:
-        description: "How to create the release branch"
-        required: true
-        type: choice
-        options:
-          - "Bump Major"
-          - "Bump Minor"
-          - "Specify Major.Minor version manually"
-        default: "Bump Minor"
-      major_version:
-        description: "Major version number (required if specifying manually)"
-        required: false
-        type: string
-        default: ""
-      minor_version:
-        description: "Minor version number (required if specifying manually)"
-        required: false
-        type: string
-        default: ""
 
 jobs:
   prepare_release_branch:
