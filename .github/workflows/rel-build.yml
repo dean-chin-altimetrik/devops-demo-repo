@@ -11,7 +11,7 @@ on:
     workflow_dispatch:
         inputs:
             release_branch:
-                description: "Release branch to build (e.g., release/1.2.x)"
+                description: "Release branch to build (e.g., release/1.2)"
                 required: true
                 type: string
                 default: ""
@@ -77,12 +77,12 @@ jobs:
                   echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
 
 
-                    # Extract major.minor from branch name (release/1.2.x -> 1.2)
-                    major_minor=$(echo $branch_name | sed 's/release\/\([0-9]*\.[0-9]*\)\.x/\1/')
+                    # Extract major.minor from branch name (release/1.2 -> 1.2)
+                    major_minor=$(echo $branch_name | sed 's/release\/\([0-9]*\.[0-9]*\)/\1/')
 
                     # Validate branch name format
-                    if [[ ! $branch_name =~ ^release/[0-9]+\.[0-9]+\.x$ ]]; then
-                        echo "Error: Invalid release branch format. Expected: release/X.Y.x (e.g., release/1.2.x)"
+                    if [[ ! $branch_name =~ ^release/[0-9]+\.[0-9]+$ ]]; then
+                        echo "Error: Invalid release branch format. Expected: release/X.Y (e.g., release/1.2)"
                         echo "Provided: $branch_name"
                         exit 1
                     fi
