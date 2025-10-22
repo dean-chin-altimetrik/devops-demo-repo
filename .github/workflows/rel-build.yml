@@ -226,7 +226,7 @@ jobs:
         environment: active
         steps:
             - name: Lookup component in REL-SCOPE tickets
-              uses: dean-chin-altimetrik/platform-github-actions/.github/actions/jira-rel-scope
+              uses: dean-chin-altimetrik/platform-github-actions/.github/actions/jira-rel-scope@main
               with:
                 command: lookup
                 project: "LPL"
