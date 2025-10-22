@@ -9,12 +9,6 @@ on:
         tags-ignore:
             - "**"
     workflow_dispatch:
-        inputs:
-            release_branch:
-                description: "Release branch to build (e.g., release/1.2)"
-                required: true
-                type: string
-                default: ""
 
 jobs:
     build:
@@ -40,7 +34,7 @@ jobs:
                   token: ${{ secrets.GITHUB_TOKEN }}
                   # Correctly determine the branch based on the trigger event.
                   ref: >-
-                      ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_branch ||
+                      ${{ github.event_name == 'workflow_dispatch' && github.ref_name ||
                       github.event_name == 'push' && github.ref }}
 
             - name: Switch to Release Branch Context
@@ -48,7 +42,7 @@ jobs:
               run: |
                   # For workflow_dispatch, we need to ensure we're in the release branch context
                   # This helps with environment protection rules
-                  release_branch="${{ github.event.inputs.release_branch }}"
+                  release_branch="${{ github.ref_name }}"
                   echo "Ensuring we're in the context of release branch: $release_branch"
 
                   # Verify we're on the correct branch
@@ -64,14 +58,9 @@ jobs:
             - name: Calculate Next Tag Version
               id: calc_tag
               run: |
-                  # Use the branch name from workflow input or fallback to current branch
-                  if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.release_branch }}" ]; then
-                      branch_name="${{ github.event.inputs.release_branch }}"
-                      echo "Using branch from workflow input: $branch_name"
-                  else
-                      branch_name=$(git branch --show-current)
-                      echo "Using current branch: $branch_name"
-                  fi
+                  # Use the branch name from GitHub context
+                  branch_name="${{ github.ref_name }}"
+                  echo "Using branch from GitHub context: $branch_name"
 
                   echo "Building branch $branch_name"
                   echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
@@ -172,8 +161,8 @@ jobs:
                   # Add build summary
                   echo "## 📦 Release Build Summary" >> $GITHUB_STEP_SUMMARY
                   echo "" >> $GITHUB_STEP_SUMMARY
-                  if [ -n "${{ github.event.inputs.release_branch }}" ]; then
-                      echo "- **Trigger:** 🔧 Manual (Branch: \`${{ github.event.inputs.release_branch }}\`)" >> $GITHUB_STEP_SUMMARY
+                  if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+                      echo "- **Trigger:** 🔧 Manual (Branch: \`${{ github.ref_name }}\`)" >> $GITHUB_STEP_SUMMARY
                   else
                       echo "- **Trigger:** 🚀 Automatic Push" >> $GITHUB_STEP_SUMMARY
                   fi
@@ -228,16 +217,16 @@ jobs:
             - name: Lookup component in REL-SCOPE tickets
               uses: dean-chin-altimetrik/platform-github-actions/.github/actions/jira-rel-scope@main
               with:
-                command: lookup
-                project: "LPL"
-                state: "Active Env"
-                component: ${{ github.event.repository.name }}
-                release_branch: ${{ github.ref_name }}
+                  command: lookup
+                  project: "LPL"
+                  state: "Active Env"
+                  component: ${{ github.event.repository.name }}
+                  release_branch: ${{ github.ref_name }}
               env:
-                JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
-                JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-                JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-            
+                  JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+                  JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+                  JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+
             - name: Deploy to ACTIVE
               run: |
                   tag_version="${{ needs.build.outputs.tag_version }}"
@@ -334,29 +323,29 @@ jobs:
         steps:
             - name: Deploy to QA-PERF
               run: |
-                tag_version="${{ needs.build.outputs.tag_version }}"
-                version="${{ needs.build.outputs.version }}"
-                commit="${{ needs.build.outputs.commit }}"
-                branch="${{ needs.build.outputs.branch }}"
+                  tag_version="${{ needs.build.outputs.tag_version }}"
+                  version="${{ needs.build.outputs.version }}"
+                  commit="${{ needs.build.outputs.commit }}"
+                  branch="${{ needs.build.outputs.branch }}"
 
-                echo "Deploying version $version (tag: $tag_version) to STAGING environment"
+                  echo "Deploying version $version (tag: $tag_version) to STAGING environment"
 
-                # Set environment variables for tracking
-                echo "CURRENT_VERSION=$version" >> $GITHUB_ENV
-                echo "CURRENT_TAG=$tag_version" >> $GITHUB_ENV
-                echo "CURRENT_COMMIT=$commit" >> $GITHUB_ENV
-                echo "CURRENT_BRANCH=$branch" >> $GITHUB_ENV
-                echo "DEPLOYMENT_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
+                  # Set environment variables for tracking
+                  echo "CURRENT_VERSION=$version" >> $GITHUB_ENV
+                  echo "CURRENT_TAG=$tag_version" >> $GITHUB_ENV
+                  echo "CURRENT_COMMIT=$commit" >> $GITHUB_ENV
+                  echo "CURRENT_BRANCH=$branch" >> $GITHUB_ENV
+                  echo "DEPLOYMENT_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
 
-                # Add to step summary
-                echo "## 🧪 LDQA Deployment" >> $GITHUB_STEP_SUMMARY
-                echo "" >> $GITHUB_STEP_SUMMARY
-                echo "- **Version:** \`$version\`" >> $GITHUB_STEP_SUMMARY
-                echo "- **Tag:** \`$tag_version\`" >> $GITHUB_STEP_SUMMARY
-                echo "- **Branch:** \`$branch\`" >> $GITHUB_STEP_SUMMARY
-                echo "- **Commit:** \`$commit\`" >> $GITHUB_STEP_SUMMARY
-                echo "- **Status:** ✅ Deployed Successfully" >> $GITHUB_STEP_SUMMARY
-                echo "- **Environment Variables Set:** ✅" >> $GITHUB_STEP_SUMMARY
+                  # Add to step summary
+                  echo "## 🧪 LDQA Deployment" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Version:** \`$version\`" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Tag:** \`$tag_version\`" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Branch:** \`$branch\`" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Commit:** \`$commit\`" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Status:** ✅ Deployed Successfully" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Environment Variables Set:** ✅" >> $GITHUB_STEP_SUMMARY
 
     deploy-staging:
         runs-on: ubuntu-latest
