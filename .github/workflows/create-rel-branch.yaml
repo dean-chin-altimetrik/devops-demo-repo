@@ -27,6 +27,11 @@ on:
         required: false
         type: string
         default: ""
+      ignore_branch_exists:
+        description: "Ignore if branch already exists and continue with the flow"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   prepare_release_branch:
@@ -38,6 +43,7 @@ jobs:
       major: ${{ steps.calc_branch_version.outputs.major }}
       minor: ${{ steps.calc_branch_version.outputs.minor }}
       jira_scope_id: ${{ steps.calc_branch_version.outputs.jira_scope_id }}
+      branch_exists: ${{ steps.check_branch.outputs.branch_exists }}
 
     steps:
       - name: Checkout code
@@ -155,17 +161,29 @@ jobs:
         id: check_branch
         run: |
           branch_name="${{ steps.calc_branch_version.outputs.branch_name }}"
+          ignore_branch_exists="${{ github.event.inputs.ignore_branch_exists }}"
 
           # Check if branch exists locally or remotely
           if git show-ref --verify --quiet refs/heads/$branch_name || git show-ref --verify --quiet refs/remotes/origin/$branch_name; then
             echo "branch_exists=true" >> $GITHUB_OUTPUT
             echo "Branch $branch_name already exists!"
 
-            # Output error summary
-            echo "❌ **ERROR: Branch \`$branch_name\` already exists!**" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Please choose a different version or delete the existing branch first." >> $GITHUB_STEP_SUMMARY
-            exit 1
+            if [ "$ignore_branch_exists" = "true" ]; then
+              echo "⚠️ Branch exists but ignoring due to ignore_branch_exists=true"
+              echo "Continuing with the workflow..."
+              
+              # Output warning summary
+              echo "⚠️ **WARNING: Branch \`$branch_name\` already exists!**" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "Continuing with the workflow as requested (ignore_branch_exists=true)." >> $GITHUB_STEP_SUMMARY
+              echo "The existing branch will be used for subsequent steps." >> $GITHUB_STEP_SUMMARY
+            else
+              # Output error summary
+              echo "❌ **ERROR: Branch \`$branch_name\` already exists!**" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "Please choose a different version, delete the existing branch first, or set ignore_branch_exists=true to continue." >> $GITHUB_STEP_SUMMARY
+              exit 1
+            fi
           else
             echo "branch_exists=false" >> $GITHUB_OUTPUT
             echo "Branch $branch_name does not exist, safe to create"
@@ -193,6 +211,7 @@ jobs:
           echo "- **Creation Mode:** \`$create_mode\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered By:** \`$actor\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Jira Scope ID:** \`$jira_scope_id\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Ignore Branch Exists:** \`${{ github.event.inputs.ignore_branch_exists }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Add final version calculation details using creation mode
@@ -239,32 +258,50 @@ jobs:
         id: create
         run: |
           branch_name="${{ needs.prepare_release_branch.outputs.branch_name }}"
+          branch_exists="${{ needs.prepare_release_branch.outputs.branch_exists }}"
+          ignore_branch_exists="${{ github.event.inputs.ignore_branch_exists }}"
 
           # Configure git
           git config user.name "${{ github.actor }}"
           git config user.email "${{ github.actor }}@users.noreply.github.com"
 
-          # Create and switch to the new branch
-          git checkout -b $branch_name
+          if [ "$branch_exists" = "true" ] && [ "$ignore_branch_exists" = "true" ]; then
+            echo "Branch $branch_name already exists and ignore_branch_exists=true"
+            echo "Switching to existing branch: $branch_name"
+            
+            # Switch to the existing branch
+            git checkout $branch_name
+            
+            # Pull latest changes from remote
+            git pull origin $branch_name || echo "No remote branch to pull from"
+            
+            echo "✅ Using existing branch: $branch_name"
+          else
+            echo "Creating new branch: $branch_name"
+            
+            # Create and switch to the new branch
+            git checkout -b $branch_name
 
-          # Ensure the rel-build workflow file exists on the release branch
-          # This is needed for the workflow_dispatch to work properly
-          if [ ! -f ".github/workflows/rel-build.yml" ]; then
-            echo "Copying rel-build.yml to release branch..."
-            # The file should already exist since we're branching from main
-            # But let's make sure it's there
-            git checkout main -- .github/workflows/rel-build.yml || true
-            git add .github/workflows/rel-build.yml || true
-            git commit -m "Add rel-build workflow to release branch" || true
+            # Ensure the rel-build workflow file exists on the release branch
+            # This is needed for the workflow_dispatch to work properly
+            if [ ! -f ".github/workflows/rel-build.yml" ]; then
+              echo "Copying rel-build.yml to release branch..."
+              # The file should already exist since we're branching from main
+              # But let's make sure it's there
+              git checkout main -- .github/workflows/rel-build.yml || true
+              git add .github/workflows/rel-build.yml || true
+              git commit -m "Add rel-build workflow to release branch" || true
+            fi
+
+            # Set up remote URL with token
+            git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+
+            # Push the new branch
+            git push -u origin $branch_name
+
+            echo "✅ Successfully created and pushed branch: $branch_name"
           fi
 
-          # Set up remote URL with token
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-
-          # Push the new branch
-          git push -u origin $branch_name
-
-          echo "✅ Successfully created and pushed branch: $branch_name"
           echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
 
       - name: Upsert component info to Jira Release Scope
