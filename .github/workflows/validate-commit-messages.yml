@@ -1,0 +1,93 @@
+name: Validate Commit Messages
+
+on:
+    push:
+        branches:
+            - "release/**"
+            - "hotfix/**"
+
+jobs:
+    validate-commits:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Validate commit messages
+              run: |
+                  # Get the branch name that was pushed to
+                  BRANCH="${{ github.ref_name }}"
+
+                  echo "Validating commits on branch: $BRANCH"
+
+                  # Jira ticket pattern: matches formats like JIRA-123, PROJ-456, etc.
+                  # Pattern: one or more uppercase letters, dash, one or more digits
+                  JIRA_PATTERN='[A-Z]+-[0-9]+'
+
+                  # Get commits that are new to this branch (not in main)
+                  # Find the merge base with main to compare only new commits
+                  if git show-ref --verify --quiet refs/remotes/origin/main; then
+                    MERGE_BASE=$(git merge-base origin/main HEAD)
+                    COMMITS=$(git log $MERGE_BASE..HEAD --pretty=format:"%H %s")
+                  else
+                    # If main doesn't exist, check all commits on this branch
+                    COMMITS=$(git log --pretty=format:"%H %s")
+                  fi
+
+                  echo ""
+                  echo "Checking commits for Jira ticket references..."
+                  echo ""
+
+                  FAILED_COMMITS=()
+
+                  # Process each commit
+                  while IFS= read -r commit_info; do
+                    if [ -z "$commit_info" ]; then
+                      continue
+                    fi
+                    
+                    COMMIT_HASH=$(echo "$commit_info" | cut -d' ' -f1)
+                    COMMIT_MESSAGE=$(echo "$commit_info" | cut -d' ' -f2-)
+                    
+                    # Check if commit message contains a Jira ticket
+                    if echo "$COMMIT_MESSAGE" | grep -qiE "$JIRA_PATTERN"; then
+                      echo "✅ $COMMIT_HASH: $COMMIT_MESSAGE"
+                    else
+                      echo "❌ $COMMIT_HASH: $COMMIT_MESSAGE"
+                      FAILED_COMMITS+=("$COMMIT_HASH: $COMMIT_MESSAGE")
+                    fi
+                  done <<< "$COMMITS"
+
+                  echo ""
+
+                  # Fail if any commits are missing Jira tickets
+                  if [ ${#FAILED_COMMITS[@]} -gt 0 ]; then
+                    echo "## ❌ Commit Validation Failed" >> $GITHUB_STEP_SUMMARY
+                    echo "" >> $GITHUB_STEP_SUMMARY
+                    echo "The following commits are missing Jira ticket references:" >> $GITHUB_STEP_SUMMARY
+                    echo "" >> $GITHUB_STEP_SUMMARY
+                    echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+                    for failed in "${FAILED_COMMITS[@]}"; do
+                      echo "$failed" >> $GITHUB_STEP_SUMMARY
+                    done
+                    echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+                    echo "" >> $GITHUB_STEP_SUMMARY
+                    echo "**Expected Format:** \`JIRA-123\` (uppercase letters, dash, numbers)" >> $GITHUB_STEP_SUMMARY
+                    echo "" >> $GITHUB_STEP_SUMMARY
+                    echo "**Branch:** \`$BRANCH\`" >> $GITHUB_STEP_SUMMARY
+                    echo "" >> $GITHUB_STEP_SUMMARY
+                    echo "To fix this, you can either:" >> $GITHUB_STEP_SUMMARY
+                    echo "1. Amend the commit message: \`git commit --amend -m 'JIRA-123: Your message'\`" >> $GITHUB_STEP_SUMMARY
+                    echo "2. Rebase and update: \`git rebase -i HEAD~N\`" >> $GITHUB_STEP_SUMMARY
+                    
+                    exit 1
+                  else
+                    echo "## ✅ All commits validated successfully!" >> $GITHUB_STEP_SUMMARY
+                    echo "" >> $GITHUB_STEP_SUMMARY
+                    echo "All commits on branch \`$BRANCH\` contain valid Jira ticket references." >> $GITHUB_STEP_SUMMARY
+                  fi
